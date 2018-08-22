@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        #canvas {
+            background: #000;
+        }
+        #enemyCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: transparent;
+            z-index: 10;
+        }
+        #bulletCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: transparent;
+            z-index: 11;
+        }
+        #textCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: transparent;
+            z-index: 12;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <canvas id="enemyCanvas"></canvas>
+    <canvas id="bulletCanvas"></canvas>
+    <canvas id="textCanvas"></canvas>
+    <script>
+        // 飞机画布
+        var canvas = document.getElementById('canvas');
+        canvas.width = 500;
+        canvas.height = 700;
+        var c = canvas.getContext('2d');
+
+        // 敌机画布
+        var eCanvas = document.getElementById('enemyCanvas');
+        eCanvas.width = canvas.width;
+        eCanvas.height = canvas.height;
+        var ec = eCanvas.getContext('2d');
+
+        // 子弹画布
+        var bCanvas = document.getElementById('bulletCanvas');
+        bCanvas.width = canvas.width;
+        bCanvas.height = canvas.height;
+        var bc = bCanvas.getContext('2d');
+
+        // 文字涂层
+        var tCanvas = document.getElementById('textCanvas');
+        tCanvas.width = canvas.width;
+        tCanvas.height = canvas.height;
+        var tc = tCanvas.getContext('2d');
+
+
+        // 我机
+        var me = {x: 200, y: 300, w: 100, h: 100};
+        // 敌机
+        var enemy = {x: 200, y: 0, w: 50, h: 50};
+        var enemys = [];
+        // 子弹
+        var bullets = [];
+        // 分数
+        var score = 0;
+        // 游戏结束弹窗
+        var gameOver = {w: 300, h: 200,};
+        gameOver.x = Math.ceil((canvas.width-gameOver.w)/2)
+        gameOver.y = Math.ceil((canvas.height-gameOver.h)/2)
+        gameOver.title = {
+            text:'GAME OVER', 
+            x: gameOver.x+Math.ceil((gameOver.w)/2), 
+            y: gameOver.y+60
+        };
+        gameOver.close = {
+            text: 'close', 
+            x: gameOver.x+Math.ceil((gameOver.w)/2), 
+            y: gameOver.y + gameOver.h-30
+        };
+        
+
+        // 加入新的敌机
+        function addEnemy() {
+            enemys.push({
+                x: Math.floor(Math.random()*450),
+                y: -200,
+                w: 50,
+                h: 50,
+            });
+        }
+        addEnemy();
+
+        // 加入新的子弹
+        function addBullet() {
+            bullets.push({
+                x: me.x + Math.ceil(me.w/2),
+                y: me.y,
+                w: 20,
+                h: 20,
+            });
+        }
+
+        // 计数器
+        var count = 0;
+
+        // 敌机自动下落
+        var enemyTimer = setInterval(function() {
+            for (var i = 0; i < enemys.length; i++) {
+                if (enemys[i].y > canvas.height) {
+                    enemys.splice(i, 1);
+                    return;
+                }
+                clearEnemy(enemys[i]);
+                enemys[i].y+=10;
+                drawEnemy(enemys[i]);
+                var res = collisionCheck(me.x, me.y, me.w, me.h, enemys[i].x, enemys[i].y, enemys[i].w, enemys[i].h);
+                if (res) {
+                    clearInterval(enemyTimer);
+                    drawGameOver();
+                }
+            }
+            if (count > 20) {
+                count = 0;
+                addEnemy();
+                return;
+            }
+            count++;
+        }, 70);
+
+        // 我机移动
+        function myPlaneMove(keyCode) {
+            clearPlane(me);
+                switch(keyCode) {
+                case 37:
+                    me.x-=10;
+                    break;
+                case 38:
+                    me.y-=10;
+                    break;
+                case 39:
+                    me.x+=10;
+                    break;
+                case 40:
+                    me.y+=10;
+                    break;
+            }
+            drawPlane(me);
+        }
+
+
+        // 子弹自动移动
+        var bulletTimer = setInterval(function(){
+            for (var i = 0; i < bullets.length; i++) {
+                if (bullets[i].y < 0) {
+                    clearBullet(bullets[i]);
+                    bullets.splice(i, 1);
+                    return;
+                }
+                clearBullet(bullets[i]);
+                bullets[i].y-=20;
+                drawBullet(bullets[i]);
+                for (var j = 0; j < enemys.length; j++) {
+                    var res = collisionCheck(enemys[j].x, enemys[j].y, enemys[j].w, enemys[j].h, bullets[i].x, bullets[i].y, bullets[i].w, bullets[i].h);
+                    if (res) {  // 消灭敌机
+                        clearEnemy(enemys[j]);
+                        enemys.splice(j, 1);
+                        clearBullet(bullets[i]);
+                        bullets.splice(i, 1);
+                        score++;
+                        drawScore(score);
+                        break;
+                    }
+                }
+            }
+        },70);
+
+        // 发射子弹
+        function shoot() {
+            addBullet();
+        }
+        
+        // 计数器
+        var keyTimer = null;
+        // 监听按键按下事件
+        // 左37 上38 右39 下40 空格32
+        window.onkeydown = function(e) {
+            var keyCode = e.keyCode;
+            if (keyCode == 37 || keyCode == 38 || keyCode == 39 || keyCode == 40) {
+                myPlaneMove(keyCode);
+                clearInterval(keyTimer);
+                keyTimer = setInterval(function(){
+                    myPlaneMove(keyCode);
+                }, 50)
+            }
+            if (keyCode == 32) {
+                shoot();
+            }
+        }
+        // 监听按键抬起
+        window.onkeyup = function(e) {
+            var keyCode = e.keyCode;
+            if (keyCode == 37 || keyCode == 38 || keyCode == 39 || keyCode == 40) {
+                clearInterval(keyTimer);
+            }
+        }
+        // 鼠标按下事件
+        window.onmouseup = function(e) {
+            var x = e.clientX;
+            var y = e.clientY;
+            var w = tc.measureText(gameOver.close.text).width;
+            if (x > gameOver.close.x - w/2 && x < gameOver.close.x + Math.ceil(w/2) && y > gameOver.close.y - 30 && y < gameOver.close.y) {
+                location.reload();
+            }
+        }
+        
+
+        // 清除我方飞机
+        function clearPlane(obj) {
+            c.clearRect(obj.x, obj.y, obj.w, obj.h);
+        }
+
+        // 绘制我方飞机
+        function drawPlane(obj) {
+            c.fillStyle = '#f00';
+            c.fillRect(obj.x, obj.y, obj.w, obj.h);
+        }
+        drawPlane(me)
+
+        // 清除已绘制敌机
+        function clearEnemy(obj) {
+            ec.clearRect(obj.x, obj.y, obj.w, obj.h);
+        }
+
+        // 绘制敌机
+        function drawEnemy(obj) {
+            ec.fillStyle = '#fff';
+            ec.fillRect(obj.x, obj.y, obj.w, obj.h);
+        }
+
+        // 清除已绘制子弹
+        function clearBullet(obj) {
+            bc.clearRect(obj.x, obj.y, obj.w, obj.h);
+        }
+
+        // 绘制子弹
+        function drawBullet(obj) {
+            bc.fillStyle = '#f0f';
+            bc.fillRect(obj.x, obj.y, obj.w, obj.h);
+        }
+
+        // 绘制分数
+        function drawScore(num) {
+            tc.clearRect(0, 0, canvas.width, 100);
+            tc.font="26px Arial";
+            tc.fillStyle = '#fff';
+            tc.fillText('当前分数:' + num, 20, 40);
+        }
+        drawScore(0);
+
+        // 绘制游戏结束弹窗
+        function drawGameOver() {
+            // 绘制边框
+            tc.fillStyle="#00f";
+            tc.fillRect(gameOver.x, gameOver.y, gameOver.w, gameOver.h);
+            // 绘制标题
+            tc.globalCompositeOperation="source-over";
+            tc.font = '40px Arial';
+            tc.fillStyle = '#0f0';
+            tc.textAlign="center";
+            tc.fillText(gameOver.title.text,gameOver.title.x, gameOver.title.y);
+            // 绘制按钮
+            tc.font = '26px Arial';
+            tc.strokeStyle = '#fff';
+            tc.fillText(gameOver.close.text, gameOver.close.x, gameOver.close.y);
+        }
+
+        // 碰撞检查
+        function collisionCheck(x1, y1, w1, h1, x2, y2, w2, h2) {
+            // 矩形A位于矩形B的右侧
+            if (x1 >= x2 && x1 >= x2 + w2) {
+                return false;
+            // 矩形A位于矩形B的左侧
+            } else if (x1 <= x2 && x1 + w1 <= x2) {
+                return false;
+            // 矩形A位于矩形B的下侧
+            } else if (y1 >= y2 && y1 >= y2 + h2) {
+                return false;
+            // 矩形A位于矩形B的上侧
+            } else if (y1 <= y2 && y1 + h1 <= y2) {
+                return false;
+            }
+            // 不相交都不满足，那就是相交了
+            return true;
+        }
+
+    </script>
+</body>
+</html>
